@@ -32,9 +32,8 @@ def ensure_snap_channels(
         channels += [f"{name}/edge"]
 
     LOG.info("Ensure snap channels %s for ver %s in snapstore", ",".join(channels), ver)
-    if not dry_run:
-        for channel in channels:
-            snapstore.ensure_track(util.SNAP_NAME, channel)
+    for channel in channels:
+        (not dry_run) and snapstore.ensure_track(util.SNAP_NAME, channel)
     return channels
 
 
@@ -69,7 +68,7 @@ def ensure_lp_recipe(
     )
     client = lp.client()
     lp_project = client.projects[util.SNAP_NAME]
-    lp_owner = client.people[util.LP_OWNER]
+    lp_owner = client.people[lp.OWNER]
     lp_repo = client.git_repositories.getDefaultRepository(target=lp_project)
     lp_ref = lp_repo.getRefByPath(path=flavor_branch)
     lp_archive = client.archives.getByReference(reference="ubuntu")
@@ -122,7 +121,8 @@ def ensure_lp_recipe(
             updated |= {key} if diff else set()
             if diff:
                 LOG.info("  Update %s: %s -> %s", key, lp_value, value)
-                (not dry_run) and setattr(recipe, key, value)
+                if not dry_run:
+                    setattr(recipe, key, value)
 
         if updated and not dry_run:
             recipe.lp_save()

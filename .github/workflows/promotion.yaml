@@ -2,6 +2,45 @@ name: Promote tracks
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        type: boolean
+        required: false
+        default: false
+        description: |-
+          If true, it will not trigger the builds, just print which would be built
+      days_in_edge_risk:
+        type: number
+        required: false
+        default: 1
+        description: |-
+          The number of days in edge risk to consider for promotion
+      days_in_beta_risk:
+        type: number
+        required: false
+        default: 3
+        description: |-
+          The number of days in beta risk to consider for promotion
+      days_in_candidate_risk:
+        type: number
+        required: false
+        default: 5
+        description: |-
+          The number of days in candidate risk to consider for promotion
+      ignore_tracks:
+        type: string
+        required: false
+        default: ''
+        description: |-
+          A space separated list of tracks to ignore when proposing promotions
+      ignore_architectures:
+        type: string
+        required: false
+        default: ''
+        description: |-
+          A space separated list of architectures to ignore when proposing promotions
+  pull_request:
+    
   schedule:
     - cron: '0 0 * * *'  # Runs every midnight
 
@@ -9,26 +48,54 @@ permissions:
   contents: read
 
 jobs:
-  promotion:
+  promotion-proposal:
     runs-on: ubuntu-latest
+    outputs:
+      proposals: ${{ steps.propose-promotions.outputs.proposals }}
     env:
-      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPSTORE_AUTH_TOKEN }}
+      LPCREDS_B64: ${{ secrets.LP_CREDS }}
+      ARGS: ''
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
         with:
           egress-policy: audit
-      - name: Checking out repo
-        uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
-      - run: pip install -r scripts/requirements.txt
-      - name: Install snapcraft
+      - run: pip install tox
+      - run: 'echo $LPCREDS_B64 | base64 --decode > lp_creds'
+      - name: Assemble Dispatch Arguments
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          sudo snap install snapcraft --classic
-      - name: Run track promotion
+          ARGS="${{ github.event.inputs.dry_run && '--dry-run' || '' }}"
+          ARGS="$ARGS --days-in-edge-risk ${{ github.event.inputs.days_in_edge_risk }}"
+          ARGS="$ARGS --days-in-beta-risk ${{ github.event.inputs.days_in_beta_risk }}"
+          ARGS="$ARGS --days-in-candidate-risk ${{ github.event.inputs.days_in_candidate_risk }}"
+          ARGS="$ARGS --ignore-tracks ${{ github.event.inputs.ignore_tracks }}"
+          ARGS="$ARGS --ignore-arches ${{ github.event.inputs.ignore_architectures }}"
+          echo "ARGS=$ARGS" >> $GITHUB_ENV
+      - name: Propose Promotions
+        id: propose-promotions
         run: |
-          ./scripts/promote_tracks.py
+          LPCREDS=./lp_creds tox -e promote -- propose --gh-action ${{ env.ARGS }}
+  test-proposal:
+    needs: promotion-proposal
+    strategy:
+      fail-fast: false   # Don't fail the entire matrix if one proposal fails
+      matrix:
+        include: ${{ fromJson(needs.promotion-proposal.outputs.proposals) }}
+    uses: ./.github/workflows/upgrade-proposal-test.yaml
+    with:
+      branch: ${{ matrix.branch }}
+      dry_run: ${{ inputs.dry_run || github.event_name == 'pull_request'}}
+      lxd-images: ${{ toJson(matrix.lxd-images) }}
+      proposal-name: ${{ matrix.name }}
+      revision: ${{ matrix.revision }}
+      runner-labels: ${{ toJson(matrix.runner-labels) }}
+      snap-channel: ${{ matrix.snap-channel }}
+      upgrade-channels: ${{ toJson(matrix.upgrade-channels) }}
+    secrets:
+      SNAPSTORE_AUTH_TOKEN: ${{ secrets.SNAPSTORE_AUTH_TOKEN }}
