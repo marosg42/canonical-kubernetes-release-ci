@@ -130,7 +130,7 @@ jobs:
           sg lxd -c 'lxc version'
       - name: Run e2e tests for revision ${{ inputs.revision }} on ${{ matrix.lxd-image}}
         env:
-          TEST_SNAP: ${{ inputs.revision }}
+          TEST_SNAP: "${{ inputs.revision }}"
           TEST_SUBSTRATE: lxd
           TEST_LXD_IMAGE: ${{ matrix.lxd-image }}
           TEST_INSPECTION_REPORTS_DIR: ${{ github.workspace }}/inspection-reports
