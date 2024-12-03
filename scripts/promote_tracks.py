@@ -357,10 +357,11 @@ def main():
     test_args.add_argument(
         "--upgrade", action="store_true", help="Only run the upgrade tests"
     )
-    if test_args.parse_known_args()[0].upgrade:
-        test_args.set_defaults(func=execute_proposal_test)
-    else:
-        test_args.set_defaults(func=execute_proposal_e2e)
+    test_args.set_defaults(
+        func=lambda args: execute_proposal_test(args)
+        if args.upgrade
+        else execute_proposal_e2e(args)
+    )
 
     promote_args = subparsers.add_parser(
         "promote", help="Promote the proposed revisions"
