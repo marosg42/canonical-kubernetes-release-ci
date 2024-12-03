@@ -91,6 +91,7 @@ jobs:
 #            ${{ inputs.dry_run && ' --dry-run' || '' }} \
 #            test \
 #            --branch="${{ inputs.branch }}"
+#            --upgrade
 #      - name: Prepare inspection reports
 #        if: failure()
 #        run: |

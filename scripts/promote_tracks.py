@@ -290,10 +290,20 @@ def execute_proposal_test(args):
     for branch in branches:
         with repo.clone(util.SNAP_REPO, branch) as dir:
             if repo.ls_tree(dir, "tests/integration/tests/test_version_upgrades.py"):
-                LOG.info("Running integration tests for %s", branch)
+                LOG.info("Running upgrade tests for %s", branch)
                 subprocess.run(cmd.split(), cwd=dir / "tests/integration", check=True)
                 return
 
+def execute_proposal_e2e(args):
+    branches = {args.branch, "main"}  # branch choices
+    cmd = f"{TOX_PATH} -e integration -- -k 'not test_version_upgrades'"
+
+    for branch in branches:
+        with repo.clone(util.SNAP_REPO, branch) as dir:
+            if repo.ls_tree(dir, "tests/integration/tests/"):
+                LOG.info("Running integration tests for %s", branch)
+                subprocess.run(cmd.split(), cwd=dir / "tests/integration", check=True)
+                return
 
 def main():
     arg_parser = argparse.ArgumentParser(
@@ -344,7 +354,13 @@ def main():
     test_args.add_argument(
         "--branch", required=True, help="The branch from which to test"
     )
-    test_args.set_defaults(func=execute_proposal_test)
+    test_args.add_argument(
+        "--upgrade", action="store_true", help="Only run the upgrade tests"
+    )
+    if test_args.parse_known_args()[0].upgrade:
+        test_args.set_defaults(func=execute_proposal_test)
+    else:
+        test_args.set_defaults(func=execute_proposal_e2e)
 
     promote_args = subparsers.add_parser(
         "promote", help="Promote the proposed revisions"
