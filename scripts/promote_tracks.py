@@ -296,13 +296,13 @@ def execute_proposal_test(args):
 
 def execute_proposal_e2e(args):
     branches = {args.branch, "main"}  # branch choices
-    cmd = f"{TOX_PATH} -e integration -- -k 'not test_version_upgrades'"
+    cmd = [TOX_PATH, "-e", "integration", "--", "-k", "not test_version_upgrades"]
 
     for branch in branches:
         with repo.clone(util.SNAP_REPO, branch) as dir:
-            if repo.ls_tree(dir, "tests/integration/tests/"):
+            if repo.ls_tree(dir, "tests/integration/"):
                 LOG.info("Running integration tests for %s", branch)
-                subprocess.run(cmd.split(), cwd=dir / "tests/integration", check=True)
+                subprocess.run(cmd, cwd=dir / "tests/integration", check=True)
                 return
 
 def main():
