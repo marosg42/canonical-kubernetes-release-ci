@@ -129,3 +129,20 @@ def test_latest_track(risk, now):
     with freeze_time(now), _make_channel_map("latest", risk):
         proposals = promote_tracks.create_proposal(args)
     assert proposals == [], "Latest track should not be promoted"
+
+@pytest.mark.parametrize(
+    "track, ignored_patterns, expected_ignored",
+    [
+        ("1.31", ["1.31", r"1\.\d+-classic"], True),  # Exact match
+        ("1.31-classic", ["1\\.31", r"1\.\d+-classic"], True),  # Regex match
+        ("1.32", ["1\\.31", r"1\.\d+-classic"], False),  # No match
+        ("1.31-classic", [], False),  # Nothing ignored
+    ],
+)
+def test_ignored_tracks(track, ignored_patterns, expected_ignored):
+    with _make_channel_map(track, "edge"):
+        args.ignore_tracks = ignored_patterns
+        proposals = promote_tracks.create_proposal(args)
+    assert (len(proposals) == 0) == expected_ignored, (
+        f"Track '{track}' should {'be ignored' if expected_ignored else 'not be ignored'}"
+        )
