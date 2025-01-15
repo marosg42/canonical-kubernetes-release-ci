@@ -14,6 +14,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Optional
 
+import k8s_release
 import util.gh as gh
 import util.lp as lp
 import util.repo as repo
@@ -134,7 +135,7 @@ def _build_upgrade_channels(
         maj, min, tail = match.groups()
     else:
         raise ValueError(f"Invalid track name: {track}")
-    prior_track = f"{maj}.{int(min)-1}{tail}"
+    prior_track = f"{maj}.{int(min) - 1}{tail}"
     prior_track_channels = [f"{prior_track}/{r}" for r in RISK_LEVELS]
     for source in reversed(prior_track_channels):
         if source in channels:
@@ -190,14 +191,13 @@ def _create_arch_proposals(arch, channels: dict[str, Channel], args):
     def sorter(info: Channel):
         return (info.name, RISK_LEVELS.index(info.risk))
 
+    latest_upstream_stable = k8s_release.get_latest_stable()
     for channel_info in sorted(channels.values(), key=sorter, reverse=True):
         track = channel_info.channel.track
         risk = channel_info.risk
         next_risk = channel_info.next_risk
         revision = channel_info.revision
         chan_log = logging.getLogger(f"{logger_name} {track:>15}/{risk:<9}")
-
-        final_channel = f"{track}/{next_risk}"
 
         if not track:
             chan_log.debug("Skipping trackless channel")
@@ -246,39 +246,61 @@ def _create_arch_proposals(arch, channels: dict[str, Channel], args):
             and channels.get(f"{track}/{next_risk}", EMPTY_CHANNEL).version
             != channels.get(f"{track}/{risk}", EMPTY_CHANNEL).version
         )
+        revision_in_stable = bool(
+            channels.get(f"{track}/stable", EMPTY_CHANNEL).revision
+        )
 
-        if purgatory_complete or new_patch_in_edge:
-            if next_risk == "stable" and f"{track}/stable" not in channels.keys():
-                # The track has not yet a stable release.
-                # The first stable release requires blessing from SolQA and needs to be promoted manually.
-                # Follow-up patches do not require this.
-                chan_log.warning(
-                    "Approval rev=%-5s arch=%s to %s needed by SolQA",
-                    revision,
-                    arch,
-                    next_risk,
-                )
-            else:
+        def _get_proposal(next_risk):
+            final_channel = f"{track}/{next_risk}"
+
+            proposal = {}
+            proposal["arch"] = arch
+            proposal["branch"] = lp.branch_from_track(util.SNAP_NAME, track)
+            proposal["upgrade-channels"] = _build_upgrade_channels(
+                channel_info, channels
+            )
+            proposal["revision"] = revision
+            proposal["track"] = track
+            proposal["next-risk"] = next_risk
+            proposal["snap-channel"] = final_channel
+            proposal["name"] = f"{util.SNAP_NAME}-{track}/{next_risk}-{arch}"
+            proposal["runner-labels"] = gh.arch_to_gh_labels(arch, self_hosted=True)
+            proposal["lxd-images"] = [f"ubuntu:{series}" for series in SERIES]
+            return proposal
+
+        # Whenever there's a new stable upstream release, we'll skip purgatory
+        # and promote it to all risk levels, including stable.
+        # We'll only do this for the latest upstream release
+        # and channels that do not have a stable release yet.
+        if new_patch_in_edge and not revision_in_stable:
+            k8s_version = util.get_k8s_snap_version(
+                (channel_info.download or {}).get("url")
+            )
+            if k8s_version == latest_upstream_stable:
                 chan_log.info(
-                    "Promotes rev=%-5s arch=%s to %s",
-                    revision,
-                    arch,
-                    next_risk,
+                    f"{track}/edge contains a stable upstream release: {k8s_version}, "
+                    "we'll skip purgatory and promote it to all risk levels "
+                    "(including stable)."
                 )
-                proposal = {}
-                proposal["arch"] = arch
-                proposal["branch"] = lp.branch_from_track(util.SNAP_NAME, track)
-                proposal["upgrade-channels"] = _build_upgrade_channels(
-                    channel_info, channels
-                )
-                proposal["revision"] = revision
-                proposal["track"] = track
-                proposal["next-risk"] = next_risk
-                proposal["snap-channel"] = final_channel
-                proposal["name"] = f"{util.SNAP_NAME}-{track}/{next_risk}-{arch}"
-                proposal["runner-labels"] = gh.arch_to_gh_labels(arch, self_hosted=True)
-                proposal["lxd-images"] = [f"ubuntu:{series}" for series in SERIES]
-                proposals.append(proposal)
+                for proposed_risk in ("beta", "candidate", "stable"):
+                    chan_log.info(
+                        "Promotes rev=%-5s arch=%s to %s",
+                        revision,
+                        arch,
+                        proposed_risk,
+                    )
+                    proposal = _get_proposal(next_risk=proposed_risk)
+                    proposals.append(proposal)
+                continue
+        if purgatory_complete or new_patch_in_edge:
+            chan_log.info(
+                "Promotes rev=%-5s arch=%s to %s",
+                revision,
+                arch,
+                next_risk,
+            )
+            proposal = _get_proposal(next_risk=next_risk)
+            proposals.append(proposal)
     return proposals
 
 

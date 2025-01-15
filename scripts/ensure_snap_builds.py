@@ -29,7 +29,14 @@ def ensure_snap_channels(
     else:
         name = f"{ver.major}.{ver.minor}"
         name += f"-{flavour}" if flavour != "strict" else ""
-        channels += [f"{name}/edge"]
+        track = "edge"
+        if ver.prerelease:
+            track = util.upstream_prerelease_to_snap_track(ver.prerelease)
+        else:
+            # Stable release, push to "edge" and go through the usual
+            # promotion workflow.
+            track = "edge"
+        channels += [f"{name}/{track}"]
 
     LOG.info("Ensure snap channels %s for ver %s in snapstore", ",".join(channels), ver)
     for channel in channels:
@@ -58,9 +65,7 @@ def ensure_lp_recipe(
         # Use a single branch for all pre-releases of a given risk level,
         # e.g. v1.33.0-alpha.0 -> autoupdate/v1.33.0-alpha
         prerelease = ver.prerelease.split(".")[0]
-        flavor_branch = (
-            f"autoupdate/v{ver.major}.{ver.minor}.{ver.patch}-{prerelease}"
-        )
+        flavor_branch = f"autoupdate/v{ver.major}.{ver.minor}.{ver.patch}-{prerelease}"
     elif tip:
         flavor_branch = "main" if flavour == "classic" else f"autoupdate/{flavour}"
     elif flavour == "classic":
