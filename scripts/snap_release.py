@@ -100,10 +100,6 @@ def get_prerelease_git_branch(prerelease: str):
     return re.sub(r"(-[a-zA-Z]+)\.[0-9]+", r"\1", branch)
 
 
-def remove_obsolete_prereleases():
-    LOG.warning("TODO: not implemented.")
-
-
 if __name__ == "__main__":
     logging.basicConfig(format="%(asctime)s %(message)s", level=logging.DEBUG)
 
@@ -118,7 +114,6 @@ if __name__ == "__main__":
     )
 
     subparsers.add_parser("get_outstanding_prerelease")
-    subparsers.add_parser("remove_obsolete_prereleases")
 
     kwargs = vars(parser.parse_args())
     f = locals()[kwargs.pop("subparser")]

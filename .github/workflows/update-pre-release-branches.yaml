@@ -39,11 +39,11 @@ jobs:
       - name: Determine outstanding pre-release
         id: determine
         run: |
-          preRelease=`python3 ./scripts/k8s_release.py get_outstanding_prerelease`
+          preRelease=`python3 ./scripts/snap_release.py get_outstanding_prerelease`
           echo "preRelease=$preRelease" >> "$GITHUB_OUTPUT"
 
           if [[ -n "$preRelease" ]]; then
-            gitBranch=`python3 ./scripts/k8s_release.py get_prerelease_git_branch --prerelease $preRelease`
+            gitBranch=`python3 ./scripts/snap_release.py get_prerelease_git_branch --prerelease $preRelease`
           fi
           echo "gitBranch=$gitBranch" >> "$GITHUB_OUTPUT"
   handle-pre-release:
@@ -78,4 +78,4 @@ jobs:
         run: pip3 install -r ./scripts/requirements.txt
       - name: Clean obsolete branches
         run: |
-          python3 ./scripts/k8s_release.py remove_obsolete_prereleases
+          python3 ./scripts/snap_release.py remove_obsolete_prereleases
