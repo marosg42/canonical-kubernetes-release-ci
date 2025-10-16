@@ -114,7 +114,7 @@ def create_one_build(
         **revisions,
     })
 
-    
+
 
     log.info(f"Creating SQA build for {channel} for revisions: {revisions}")
     if not dry_run:
@@ -170,7 +170,7 @@ def main():
             args.base,
             args.dry_run,
         )
-        
+
     results = get_results(state)
     with open("results.txt", "w") as f:
         f.write(results)

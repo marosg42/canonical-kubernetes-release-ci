@@ -33,6 +33,12 @@ class SQAFailure(Exception):
     pass
 
 
+class BuildResult(StrEnum):
+    SUCCESS = "1"
+    FAILURE = "2"
+    UNKNOWN = "0"
+
+
 def get_series(base: str) -> str | None:
     base_series_map = {
         "24.04": "noble",
@@ -62,12 +68,19 @@ class PriorityGenerator:
 class Build(BaseModel):
     uuid: UUID
     status: str
-    result: str
+    result: BuildResult
     created_at: datetime.datetime
     addon_id: str
     arch: Optional[str] = None
     base: Optional[str] = None
     channel: Optional[str] = None
+
+    @field_validator("result", mode="before")
+    def fallback_unknown(cls, v: str) -> BuildResult:
+        try:
+            return BuildResult(v)
+        except ValueError:
+            return BuildResult.UNKNOWN
 
     @field_validator("created_at", mode="before")
     @classmethod
